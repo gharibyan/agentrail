@@ -1,0 +1,10 @@
+{
+  "name": "@agentrail/markdown-extractor",
+  "version": "0.1.0",
+  "description": "Deterministic public HTML to Markdown extraction for AgentRail.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,26 @@
+{
+  "name": "agentrail",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare edge layer that serves deterministic Markdown responses to AI agents.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node --import tsx --test packages/*/test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "wrangler dev --test-scheduled -c wrangler.example.jsonc",
+    "deploy": "wrangler deploy -c wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^4.97.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0"
+}

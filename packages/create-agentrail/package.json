@@ -1,0 +1,13 @@
+{
+  "name": "create-agentrail",
+  "version": "0.1.0",
+  "description": "Create a Cloudflare AgentRail project.",
+  "type": "module",
+  "bin": {
+    "create-agentrail": "./bin/create-agentrail.ts"
+  },
+  "exports": {
+    ".": "./src/scaffold.ts"
+  },
+  "license": "Apache-2.0"
+}

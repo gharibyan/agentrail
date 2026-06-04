@@ -1,0 +1,28 @@
+{
+  "name": "agentrail",
+  "main": "packages/worker/src/index.ts",
+  "compatibility_date": "2026-06-03",
+  "routes": [
+    {
+      "pattern": "example.com/*",
+      "custom_domain": false
+    }
+  ],
+  "vars": {
+    "AGENTRAIL_ORIGIN": "https://example.com",
+    "AGENTRAIL_SITEMAP_URL": "https://example.com/sitemap.xml",
+    "AGENTRAIL_MAX_PAGES_PER_RUN": "500",
+    "AGENTRAIL_STALE_WINDOW_HOURS": "168"
+  },
+  "triggers": {
+    "crons": [
+      "0 */6 * * *"
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "AGENTRAIL_RESOURCES",
+      "id": "replace-with-agentrail-resources-kv-id"
+    }
+  ]
+}

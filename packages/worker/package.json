@@ -1,0 +1,14 @@
+{
+  "name": "@agentrail/worker",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker runtime for AgentRail.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentrail/bot-detector": "0.1.0",
+    "@agentrail/crawler": "0.1.0"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@agentrail/bot-detector",
+  "version": "0.1.0",
+  "description": "Classify AI agents, search crawlers, browsers, and unknown bots.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "Apache-2.0"
+}

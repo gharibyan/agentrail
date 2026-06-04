@@ -1,0 +1,13 @@
+{
+  "name": "@agentrail/crawler",
+  "version": "0.1.0",
+  "description": "Background crawl primitives for AgentRail.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentrail/markdown-extractor": "0.1.0"
+  },
+  "license": "Apache-2.0"
+}
