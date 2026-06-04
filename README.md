@@ -5,10 +5,10 @@ AgentRail is a Cloudflare edge layer that gives known AI agents deterministic Ma
 ```txt
 Browser or search crawler -> /pricing -> origin HTML
 Known AI agent           -> /pricing -> generated Markdown if ready
-Known AI agent           -> /pricing -> origin HTML if missing or failed
+Known AI agent           -> /pricing -> origin HTML if Markdown is unavailable
 ```
 
-The crawler runs in the background. Request handling never parses pages on demand, so cache misses fall through to the original site without adding generation latency.
+The crawler runs in the background. Request handling never waits for extraction, so cache misses fall through to the original site without adding generation latency.
 When a known AI agent requests a page that is not in KV yet, AgentRail returns the origin page and uses `ctx.waitUntil` to warm KV from that same origin response. A later AI-agent request can then receive the prepared Markdown.
 
 ## E2E Flow
@@ -30,9 +30,9 @@ flowchart TD
   originfetch --> firstbot["Return origin HTML to first bot"]
   originfetch --> waituntil["ctx.waitUntil warmup"]
   waituntil --> extract["Extract deterministic Markdown"]
-  extract --> store["Store page:<canonical-url> in AGENTRAIL_RESOURCES KV"]
+  extract --> store["Store page:<normalized-url> in AGENTRAIL_RESOURCES KV"]
 
-  kvcheck -->|"failed, skipped, or too stale"| origin
+  kvcheck -->|"pending, failed, skipped, or too stale"| origin
   cron["Cloudflare Cron Trigger"] --> sitemap["Fetch sitemap"]
   sitemap --> crawl["Crawl sitemap URLs"]
   crawl --> extract
@@ -70,7 +70,7 @@ node --import tsx packages/create-agentrail/bin/create-agentrail.ts my-site \
   --schedule="0 */6 * * *"
 ```
 
-The CLI checks Cloudflare through Wrangler, reuses an existing `AGENTRAIL_RESOURCES` KV namespace if one is present, or creates it automatically if it is missing. The generated project contains a Wrangler-compatible Worker entrypoint and config with the real KV namespace id already written into `wrangler.jsonc`.
+The CLI checks Cloudflare through Wrangler, reuses an existing `AGENTRAIL_RESOURCES` KV namespace if one is present, or creates it automatically if it is missing. When that setup succeeds, the generated project contains a Wrangler-compatible Worker entrypoint and config with the real KV namespace id already written into `wrangler.jsonc`. If automatic setup is skipped or fails, the config keeps a placeholder and the generated README explains the manual KV setup.
 
 It also runs `npm install` inside the generated project by default, so the normal next step is deploy:
 
@@ -192,7 +192,7 @@ AgentRail only returns Markdown when a stored resource is safe to serve:
 
 - `ready`: return Markdown.
 - `stale`: return Markdown only inside the configured stale window.
-- `missing`, `failed`, `skipped`, or too stale: pass through to origin.
+- `missing`, `pending`, `failed`, `skipped`, or too stale: pass through to origin.
 
 Humans, traditional search crawlers, unknown bots, assets, and non-GET/HEAD requests always pass through to origin.
 Known AI-agent GET requests with no KV record also schedule a background warmup from the origin response before passing through. That keeps the first miss fast and prepares the next bot request.
@@ -203,19 +203,23 @@ AgentRail treats these user agents as AI-agent traffic by default:
 
 ```txt
 Applebot
-ChatGPT-User
 GPTBot
+ChatGPT-User
 OAI-SearchBot
 Google-CloudVertexBot
-PerplexityBot
 ClaudeBot
-CCBot
+Claude-User
 Claude-SearchBot
+Anthropic-AI
+PerplexityBot
+Perplexity-User
+YouBot
+Cohere-AI
 Amazonbot
 Anchor Browser
 Bytespider
-Claude-User
 Cloudflare Crawler
+CCBot
 DuckAssistBot
 FacebookBot
 Manus Bot
@@ -223,14 +227,13 @@ Meta-ExternalAgent
 Meta-ExternalFetcher
 MistralAI-User
 Novellum AI Crawl
-Perplexity-User
 PetalBot
 ProRataInc
 TikTok Spider
 Timpibot
 ```
 
-Googlebot, Bingbot, archive.org_bot, Arquivo Web Crawler, Terracotta Bot, and other traditional search crawlers stay on the origin path.
+Googlebot, Bingbot, DuckDuckBot, YandexBot, Baiduspider, archive.org_bot, Arquivo Web Crawler, Terracotta Bot, Slurp, and other traditional search crawlers stay on the origin path.
 
 ## Basic Cloudflare Mode
 
