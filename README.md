@@ -243,6 +243,7 @@ The basic mode uses:
 - Cron Trigger for sitemap crawling.
 - KV namespace named `AGENTRAIL_RESOURCES` for Markdown records.
 - Request-time warmup for AI-agent misses.
+- Persisted Worker logs through Cloudflare observability.
 
 Cron can crawl sitemap pages directly into KV. A production deployment can add Queues and D1 later, but they are not required for the first useful version.
 
@@ -251,6 +252,8 @@ Local Wrangler does not run Cron Triggers by itself. AgentRail's dev script uses
 ```bash
 curl "http://localhost:8787/__scheduled?cron=0+*/6+*+*+*"
 ```
+
+For deployed Workers, AgentRail enables persisted logs and invocation logs in `wrangler.jsonc`. Use `npm run tail` or the Cloudflare dashboard logs view to inspect requests while testing.
 
 ## Generated Markdown
 

@@ -28,6 +28,12 @@ test("builds a Wrangler-compatible Cloudflare project scaffold", () => {
   assert.match(files["wrangler.jsonc"], /"pattern": "example.com\/\*"/);
   assert.match(files["wrangler.jsonc"], /"id": "abc123"/);
   assert.match(files["wrangler.jsonc"], /"crons": \[/);
+  const wranglerConfig = JSON.parse(files["wrangler.jsonc"]);
+  assert.equal(wranglerConfig.observability.enabled, false);
+  assert.equal(wranglerConfig.observability.logs.enabled, true);
+  assert.equal(wranglerConfig.observability.logs.persist, true);
+  assert.equal(wranglerConfig.observability.logs.invocation_logs, true);
+  assert.equal(wranglerConfig.observability.traces.enabled, false);
   assert.match(files["src/index.ts"], /AGENTRAIL_ORIGIN/);
   assert.match(files["src/index.ts"], /AgentRailEnv/);
   assert.match(files["src/index.ts"], /agentrail\.queue\(batch, env\);/);
@@ -35,6 +41,7 @@ test("builds a Wrangler-compatible Cloudflare project scaffold", () => {
   assert.match(files["README.md"], /installs dependencies automatically by default/);
   assert.match(files["README.md"], /workers\.dev subdomain/);
   assert.match(files["README.md"], /__scheduled/);
+  assert.match(files["README.md"], /persist Worker logs/);
 });
 
 test("can scaffold with local file dependencies before packages are published", () => {
