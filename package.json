@@ -11,7 +11,8 @@
     "test": "node --import tsx --test packages/*/test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "wrangler dev --test-scheduled -c wrangler.example.jsonc",
-    "deploy": "wrangler deploy -c wrangler.jsonc"
+    "deploy": "wrangler deploy -c wrangler.jsonc",
+    "tail": "wrangler tail -c wrangler.jsonc"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

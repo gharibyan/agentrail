@@ -118,6 +118,21 @@ function buildWranglerConfig({
     name: projectName,
     main: "src/index.ts",
     compatibility_date: "2026-06-03",
+    observability: {
+      enabled: false,
+      head_sampling_rate: 1,
+      logs: {
+        enabled: true,
+        head_sampling_rate: 1,
+        persist: true,
+        invocation_logs: true
+      },
+      traces: {
+        enabled: false,
+        persist: true,
+        head_sampling_rate: 1
+      }
+    },
     routes: [{ pattern: route, custom_domain: false }],
     vars: {
       AGENTRAIL_ORIGIN: origin,
@@ -232,5 +247,7 @@ The dev server starts Wrangler with scheduled-test support. Trigger the backgrou
 \`\`\`bash
 curl "http://localhost:8787/__scheduled?cron=0+*/6+*+*+*"
 \`\`\`
+
+Deployed projects persist Worker logs to Cloudflare observability by default. Use \`npm run tail\` for a live log stream while testing a deployment.
 `;
 }
