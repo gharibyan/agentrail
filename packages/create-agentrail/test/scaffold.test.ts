@@ -54,6 +54,7 @@ test("can scaffold with local file dependencies before packages are published", 
   const manifest = JSON.parse(files["package.json"]);
 
   assert.equal(manifest.dependencies["@agentrail/worker"], "file:../../packages/worker");
+  assert.equal(manifest.dependencies["@agentrail/runtime"], "file:../../packages/runtime");
   assert.equal(manifest.dependencies["@agentrail/bot-detector"], "file:../../packages/bot-detector");
   assert.equal(manifest.dependencies["@agentrail/crawler"], "file:../../packages/crawler");
   assert.equal(manifest.dependencies["@agentrail/markdown-extractor"], "file:../../packages/markdown-extractor");

@@ -86,6 +86,7 @@ function buildDependencies(localPackageRoot?: string, targetDir?: string): Packa
   const root = String(localPackageRoot).replace(/\/+$/g, "");
   return {
     "@agentrail/worker": localPackageReference(root, targetDir, "packages/worker"),
+    "@agentrail/runtime": localPackageReference(root, targetDir, "packages/runtime"),
     "@agentrail/bot-detector": localPackageReference(root, targetDir, "packages/bot-detector"),
     "@agentrail/crawler": localPackageReference(root, targetDir, "packages/crawler"),
     "@agentrail/markdown-extractor": localPackageReference(root, targetDir, "packages/markdown-extractor")

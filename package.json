@@ -2,7 +2,7 @@
   "name": "agentrail",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare edge layer that serves deterministic Markdown responses to AI agents.",
+  "description": "Platform adapters that serve deterministic Markdown responses to AI agents.",
   "type": "module",
   "workspaces": [
     "packages/*"

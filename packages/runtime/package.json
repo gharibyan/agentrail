@@ -1,0 +1,14 @@
+{
+  "name": "@agentrail/runtime",
+  "version": "0.1.0",
+  "description": "Platform-neutral AgentRail request runtime.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentrail/bot-detector": "0.1.0",
+    "@agentrail/crawler": "0.1.0"
+  },
+  "license": "Apache-2.0"
+}
