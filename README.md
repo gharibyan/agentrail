@@ -188,6 +188,37 @@ npm run deploy
 
 If this is the first Worker on the Cloudflare account, open Workers & Pages in the Cloudflare dashboard once before deploying so Cloudflare creates the required `workers.dev` subdomain for cron schedules.
 
+## Cloudflare KV Maintenance
+
+Generated Cloudflare projects include operator scripts for remote `AGENTRAIL_RESOURCES` KV cleanup.
+
+Drop one generated Markdown resource by URL:
+
+```bash
+npm run kv:drop -- https://www.finalbitai.com/features
+```
+
+Clear all generated AgentRail page resources:
+
+```bash
+npm run kv:clear -- --yes
+```
+
+For older generated projects that do not have these scripts yet, run Wrangler directly from the deployed project directory:
+
+```bash
+npx wrangler kv key delete "page:https://www.finalbitai.com/features" --binding AGENTRAIL_RESOURCES --remote
+```
+
+To clear all AgentRail page keys manually, list keys with the `page:` prefix and pass that JSON file to Wrangler bulk delete:
+
+```bash
+npx wrangler kv key list --binding AGENTRAIL_RESOURCES --prefix "page:" --remote > agentrail-keys.json
+npx wrangler kv bulk delete agentrail-keys.json --binding AGENTRAIL_RESOURCES --remote --force
+```
+
+After deleting a key, the next AI-agent request falls back to the origin page and schedules background warmup. A later AI-agent request receives regenerated Markdown.
+
 ## Runtime Contract
 
 AgentRail only returns Markdown when a stored resource is safe to serve:
