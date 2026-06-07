@@ -259,6 +259,7 @@ GPTBot
 ChatGPT-User
 OAI-SearchBot
 Google-CloudVertexBot
+Claude (versioned Claude/1.0 style user agents)
 ClaudeBot
 Claude-User
 Claude-SearchBot

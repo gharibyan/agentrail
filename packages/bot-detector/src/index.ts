@@ -27,6 +27,7 @@ export const DEFAULT_AI_BOT_PATTERNS: BotPattern[] = [
   { name: "ChatGPT-User", pattern: /\bchatgpt-user\b/i },
   { name: "OAI-SearchBot", pattern: /\boai-searchbot\b/i },
   { name: "Google-CloudVertexBot", pattern: /\bgoogle-cloudvertexbot\b/i },
+  { name: "Claude", pattern: /\bclaude\/\d+(?:\.\d+)?\b/i },
   { name: "ClaudeBot", pattern: /\bclaudebot\b/i },
   { name: "Claude-User", pattern: /\bclaude-user\b/i },
   { name: "Claude-SearchBot", pattern: /\bclaude-searchbot\b/i },
