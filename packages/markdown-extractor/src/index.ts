@@ -9,6 +9,13 @@ const NON_CONTENT_TAGS = [
 ];
 
 const BLOCK_DROP_TAGS = ["nav", "footer", "aside"];
+const BLOCK_CONTENT_PATTERN = /<(h[1-6]|p|div|section|article|main|ul|ol|li|table)\b/i;
+const CTA_LINE_PATTERN = /^(Explore|Learn|Read|View|Open|Start|Try|Sign up|Get started)\b/i;
+
+type JsonValue = null | string | number | boolean | JsonValue[] | JsonObject;
+interface JsonObject {
+  [key: string]: JsonValue;
+}
 
 export interface ExtractMarkdownInput {
   html: string;
@@ -28,11 +35,12 @@ export function extractMarkdown({ html, url, generatedAt = new Date().toISOStrin
   const canonicalUrl = canonicalizeUrl(readCanonicalUrl(cleaned) ?? url);
   const title = readTitle(cleaned) || titleFromUrl(canonicalUrl);
   const description = readMetaDescription(cleaned);
+  const structuredDataMarkdown = structuredDataToMarkdown(html, canonicalUrl);
   const contentHtml = selectMainContent(cleaned);
   const contentMarkdown = htmlToMarkdown(contentHtml, canonicalUrl);
   const finalDescription = description || firstMeaningfulParagraph(contentMarkdown);
 
-  return [
+  const sections = [
     `# ${title}`,
     "",
     `Canonical URL: ${canonicalUrl}`,
@@ -40,11 +48,20 @@ export function extractMarkdown({ html, url, generatedAt = new Date().toISOStrin
     "Source: public HTML",
     "",
     "## Description",
-    finalDescription || "No description found.",
+    finalDescription || "No description found."
+  ];
+
+  if (structuredDataMarkdown) {
+    sections.push("", "## Structured Data", structuredDataMarkdown);
+  }
+
+  sections.push(
     "",
     "## Content",
     contentMarkdown || "No extractable content found."
-  ].join("\n").trimEnd() + "\n";
+  );
+
+  return sections.join("\n").trimEnd() + "\n";
 }
 
 export function htmlToMarkdown(html: string, baseUrl: string): string {
@@ -52,12 +69,7 @@ export function htmlToMarkdown(html: string, baseUrl: string): string {
 
   working = working.replace(/<table\b[^>]*>[\s\S]*?<\/table>/gi, tableToMarkdown);
   working = working.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_match: string, attrs: string, label: string) => {
-    const href = readAttr(attrs, "href");
-    const text = inlineText(label);
-    if (!href || !text) {
-      return text;
-    }
-    return `[${text}](${absoluteUrl(href, baseUrl)})`;
+    return anchorToMarkdown(attrs, label, baseUrl);
   });
   working = working.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_match: string, level: string, value: string) => {
     return `\n${"#".repeat(Number(level))} ${inlineText(value)}\n\n`;
@@ -73,6 +85,44 @@ export function htmlToMarkdown(html: string, baseUrl: string): string {
   working = working.replace(/<(div|section|article|main|ul|ol|tbody|thead|tr)\b[^>]*>/gi, "\n");
 
   return normalizeMarkdown(stripTags(working));
+}
+
+function anchorToMarkdown(attrs: string, label: string, baseUrl: string): string {
+  const href = readAttr(attrs, "href");
+  if (BLOCK_CONTENT_PATTERN.test(label)) {
+    const content = htmlToMarkdown(label, baseUrl);
+    const linkLabel = blockLinkLabel(attrs, content);
+    const contentWithoutCta = removeStandaloneLine(content, linkLabel);
+    if (!href) {
+      return `\n${contentWithoutCta}\n`;
+    }
+    return `\n${contentWithoutCta}\n\n[${linkLabel}](${absoluteUrl(href, baseUrl)})\n`;
+  }
+
+  const text = inlineText(label);
+  if (!href || !text) {
+    return text;
+  }
+  return `[${text}](${absoluteUrl(href, baseUrl)})`;
+}
+
+function blockLinkLabel(attrs: string, content: string): string {
+  const lines = content
+    .split("\n")
+    .map((line) => line.replace(/^#+\s*/, "").replace(/^-\s*/, "").trim())
+    .filter(Boolean);
+  const cta = [...lines].reverse().find((line) => line.length <= 80 && CTA_LINE_PATTERN.test(line));
+  return cta || cleanText(readAttr(attrs, "aria-label") ?? "Open page");
+}
+
+function removeStandaloneLine(content: string, lineToRemove: string): string {
+  const target = cleanText(lineToRemove);
+  return content
+    .split("\n")
+    .filter((line) => cleanText(line.replace(/^#+\s*/, "").replace(/^-\s*/, "")) !== target)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function tableToMarkdown(tableHtml: string): string {
@@ -118,6 +168,225 @@ function removeDroppedBlocks(html: string): string {
 
 function removeComments(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+function structuredDataToMarkdown(html: string, baseUrl: string): string {
+  const sections = extractJsonLdNodes(html)
+    .map((node) => formatStructuredNode(node, baseUrl))
+    .filter((section): section is string => Boolean(section));
+
+  return [...new Set(sections)].join("\n\n");
+}
+
+function extractJsonLdNodes(html: string): JsonObject[] {
+  const nodes: JsonObject[] = [];
+  for (const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    const attrs = script[1];
+    if (readAttr(attrs, "type")?.toLowerCase() !== "application/ld+json") {
+      continue;
+    }
+
+    const raw = script[2].trim();
+    if (!raw) {
+      continue;
+    }
+
+    try {
+      visitJsonLd(JSON.parse(raw) as unknown, nodes);
+    } catch {
+      continue;
+    }
+  }
+  return nodes;
+}
+
+function visitJsonLd(value: unknown, nodes: JsonObject[]): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      visitJsonLd(item, nodes);
+    }
+    return;
+  }
+  if (!isJsonObject(value)) {
+    return;
+  }
+
+  const graph = value["@graph"];
+  if (Array.isArray(graph)) {
+    visitJsonLd(graph, nodes);
+  }
+  nodes.push(value);
+}
+
+function formatStructuredNode(node: JsonObject, baseUrl: string): string | null {
+  const types = typeNames(node);
+  if (types.includes("Organization")) {
+    return formatOrganization(node, baseUrl);
+  }
+  if (types.includes("SoftwareApplication")) {
+    return formatSoftwareApplication(node, baseUrl);
+  }
+  if (types.includes("WebPage")) {
+    return formatWebPage(node, baseUrl);
+  }
+  if (types.includes("BreadcrumbList")) {
+    return formatBreadcrumbList(node, baseUrl);
+  }
+  return null;
+}
+
+function formatOrganization(node: JsonObject, baseUrl: string): string {
+  const lines = namedEntityLines(node, baseUrl);
+  const sameAs = stringList(node, "sameAs").map((value) => safeAbsoluteUrl(value, baseUrl));
+  if (sameAs.length > 0) {
+    lines.push("Same as:", ...sameAs.map((value) => `- ${value}`));
+  }
+  return sectionMarkdown("Organization", lines);
+}
+
+function formatSoftwareApplication(node: JsonObject, baseUrl: string): string {
+  const lines = namedEntityLines(node, baseUrl);
+  const category = stringValue(node, "applicationCategory");
+  const operatingSystem = stringValue(node, "operatingSystem");
+  const features = stringList(node, "featureList");
+  const offer = offerUrl(node, baseUrl);
+
+  if (category) {
+    lines.push(`Category: ${category}`);
+  }
+  if (operatingSystem) {
+    lines.push(`Operating system: ${operatingSystem}`);
+  }
+  if (features.length > 0) {
+    lines.push("Features:", ...features.map((feature) => `- ${feature}`));
+  }
+  if (offer) {
+    lines.push(`Offer: ${offer}`);
+  }
+
+  return sectionMarkdown("SoftwareApplication", lines);
+}
+
+function formatWebPage(node: JsonObject, baseUrl: string): string {
+  return sectionMarkdown("WebPage", namedEntityLines(node, baseUrl));
+}
+
+function formatBreadcrumbList(node: JsonObject, baseUrl: string): string {
+  const items = objectList(node, "itemListElement")
+    .map((item) => {
+      const name = stringValue(item, "name");
+      const url = breadcrumbItemUrl(item, baseUrl);
+      if (!name && !url) {
+        return "";
+      }
+      return `- ${[name, url].filter(Boolean).join(": ")}`;
+    })
+    .filter(Boolean);
+
+  return items.length > 0 ? sectionMarkdown("Breadcrumbs", items) : "";
+}
+
+function namedEntityLines(node: JsonObject, baseUrl: string): string[] {
+  const lines: string[] = [];
+  const name = stringValue(node, "name");
+  const url = stringValue(node, "url");
+  const description = stringValue(node, "description");
+
+  if (name) {
+    lines.push(`Name: ${name}`);
+  }
+  if (url) {
+    lines.push(`URL: ${safeAbsoluteUrl(url, baseUrl)}`);
+  }
+  if (description) {
+    lines.push(`Description: ${description}`);
+  }
+  return lines;
+}
+
+function sectionMarkdown(title: string, lines: string[]): string {
+  return lines.length > 0 ? [`### ${title}`, ...lines].join("\n") : "";
+}
+
+function offerUrl(node: JsonObject, baseUrl: string): string {
+  const offers = node.offers;
+  if (typeof offers === "string") {
+    return safeAbsoluteUrl(offers, baseUrl);
+  }
+  if (isJsonObject(offers)) {
+    const url = stringValue(offers, "url");
+    return url ? safeAbsoluteUrl(url, baseUrl) : "";
+  }
+  return "";
+}
+
+function breadcrumbItemUrl(item: JsonObject, baseUrl: string): string {
+  const itemValue = item.item;
+  if (typeof itemValue === "string") {
+    return safeAbsoluteUrl(itemValue, baseUrl);
+  }
+  if (isJsonObject(itemValue)) {
+    const url = stringValue(itemValue, "url") || stringValue(itemValue, "@id");
+    return url ? safeAbsoluteUrl(url, baseUrl) : "";
+  }
+  return "";
+}
+
+function typeNames(node: JsonObject): string[] {
+  const value = node["@type"];
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+  return [];
+}
+
+function stringValue(node: JsonObject, key: string): string {
+  const value = node[key];
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return cleanText(String(value));
+  }
+  return "";
+}
+
+function stringList(node: JsonObject, key: string): string[] {
+  const value = node[key];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+          return cleanText(String(item));
+        }
+        if (isJsonObject(item)) {
+          return stringValue(item, "name") || stringValue(item, "url");
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return [cleanText(value)];
+  }
+  return [];
+}
+
+function objectList(node: JsonObject, key: string): JsonObject[] {
+  const value = node[key];
+  return Array.isArray(value) ? value.filter(isJsonObject) : [];
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function safeAbsoluteUrl(value: string, baseUrl: string): string {
+  try {
+    return absoluteUrl(value, baseUrl);
+  } catch {
+    return value;
+  }
 }
 
 function selectMainContent(html: string): string {
