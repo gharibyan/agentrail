@@ -25,6 +25,7 @@ test("classifies default AI bot allowlist as AI agents", () => {
     ["Google-CloudVertexBot/1.0", "Google-CloudVertexBot"],
     ["PerplexityBot/1.0", "PerplexityBot"],
     ["ClaudeBot/1.0", "ClaudeBot"],
+    ["Mozilla/5.0 (compatible; Claude/1.0)", "Claude"],
     ["CCBot/2.0", "CCBot"],
     ["Claude-SearchBot/1.0", "Claude-SearchBot"],
     ["Amazonbot/1.0", "Amazonbot"],

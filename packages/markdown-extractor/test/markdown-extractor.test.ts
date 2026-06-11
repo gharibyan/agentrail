@@ -75,3 +75,88 @@ test("converts simple HTML tables to Markdown tables", () => {
   assert.match(markdown, /\| --- \| --- \|/);
   assert.match(markdown, /\| Starter \| 3 \|/);
 });
+
+test("includes useful JSON-LD metadata before dropping scripts", () => {
+  const html = `
+    <html>
+      <head>
+        <title>Features</title>
+        <script type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "Organization",
+                "name": "FinalBit",
+                "url": "https://www.finalbitai.com",
+                "description": "AI filmmaking platform."
+              },
+              {
+                "@type": "SoftwareApplication",
+                "name": "FinalBit",
+                "applicationCategory": "MultimediaApplication",
+                "operatingSystem": "Web",
+                "description": "All-in-one AI filmmaking platform.",
+                "featureList": [
+                  "AI screenwriting and screenplay formatting",
+                  "AI storyboarding"
+                ],
+                "offers": {
+                  "@type": "Offer",
+                  "url": "https://www.finalbitai.com/pricing"
+                }
+              }
+            ]
+          }
+        </script>
+      </head>
+      <body><main><h1>Features</h1></main></body>
+    </html>
+  `;
+
+  const markdown = extractMarkdown({
+    html,
+    url: "https://www.finalbitai.com/features",
+    generatedAt: "2026-06-03T00:00:00.000Z"
+  });
+
+  assert.match(markdown, /## Structured Data/);
+  assert.match(markdown, /### Organization/);
+  assert.match(markdown, /Name: FinalBit/);
+  assert.match(markdown, /Description: AI filmmaking platform\./);
+  assert.match(markdown, /### SoftwareApplication/);
+  assert.match(markdown, /Category: MultimediaApplication/);
+  assert.match(markdown, /Operating system: Web/);
+  assert.match(markdown, /Features:\n- AI screenwriting and screenplay formatting\n- AI storyboarding/);
+  assert.match(markdown, /Offer: https:\/\/www\.finalbitai\.com\/pricing/);
+});
+
+test("formats block links without collapsing card content", () => {
+  const html = `
+    <html>
+      <head><title>Features</title></head>
+      <body>
+        <main>
+          <a href="/features/coverage" aria-label="Explore AI Script Coverage">
+            <div>
+              <h3>AI Script Coverage</h3>
+              <p>Analyze screenplays for story, characters, and production feasibility.</p>
+            </div>
+            <div><span>Explore Feature</span></div>
+          </a>
+        </main>
+      </body>
+    </html>
+  `;
+
+  const markdown = extractMarkdown({
+    html,
+    url: "https://www.finalbitai.com/features",
+    generatedAt: "2026-06-03T00:00:00.000Z"
+  });
+
+  assert.match(markdown, /### AI Script Coverage/);
+  assert.match(markdown, /Analyze screenplays for story, characters, and production feasibility\./);
+  assert.match(markdown, /\[Explore Feature\]\(https:\/\/www\.finalbitai\.com\/features\/coverage\)/);
+  assert.doesNotMatch(markdown, /AI Script CoverageAnalyze screenplays/);
+});

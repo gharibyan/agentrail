@@ -1,13 +1,12 @@
 {
-  "name": "@agentrail/worker",
+  "name": "@agentrail/node",
   "version": "0.1.0",
-  "description": "Cloudflare Worker runtime for AgentRail.",
+  "description": "Node.js middleware adapters for AgentRail.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@agentrail/crawler": "0.1.0",
     "@agentrail/runtime": "0.1.0"
   },
   "license": "Apache-2.0"

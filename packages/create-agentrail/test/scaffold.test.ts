@@ -20,9 +20,12 @@ test("builds a Wrangler-compatible Cloudflare project scaffold", () => {
   assert.ok(files["package.json"]);
   assert.ok(files["wrangler.jsonc"]);
   assert.ok(files["src/index.ts"]);
+  assert.ok(files["scripts/agentrail-kv.mjs"]);
   assert.ok(files["tsconfig.json"]);
   assert.match(files["package.json"], /"name": "demo-site"/);
   assert.match(files["package.json"], /"dev": "wrangler dev --test-scheduled"/);
+  assert.match(files["package.json"], /"kv:drop": "node scripts\/agentrail-kv\.mjs drop"/);
+  assert.match(files["package.json"], /"kv:clear": "node scripts\/agentrail-kv\.mjs clear"/);
   assert.match(files["package.json"], /"wrangler": "\^4\.97\.0"/);
   assert.match(files["package.json"], /"node": ">=22"/);
   assert.match(files["wrangler.jsonc"], /"pattern": "example.com\/\*"/);
@@ -42,6 +45,12 @@ test("builds a Wrangler-compatible Cloudflare project scaffold", () => {
   assert.match(files["README.md"], /workers\.dev subdomain/);
   assert.match(files["README.md"], /__scheduled/);
   assert.match(files["README.md"], /persist Worker logs/);
+  assert.match(files["README.md"], /npm run kv:drop -- https:\/\/example\.com\/features/);
+  assert.match(files["README.md"], /npm run kv:clear -- --yes/);
+  assert.match(files["scripts/agentrail-kv.mjs"], /resourceKeyForUrl/);
+  assert.match(files["scripts/agentrail-kv.mjs"], /const \[, , command, \.\.\.args\] = process\.argv/);
+  assert.match(files["scripts/agentrail-kv.mjs"], /wrangler", \["kv", "key", "delete"/);
+  assert.match(files["scripts/agentrail-kv.mjs"], /wrangler", \["kv", "bulk", "delete"/);
 });
 
 test("can scaffold with local file dependencies before packages are published", () => {
@@ -54,6 +63,7 @@ test("can scaffold with local file dependencies before packages are published", 
   const manifest = JSON.parse(files["package.json"]);
 
   assert.equal(manifest.dependencies["@agentrail/worker"], "file:../../packages/worker");
+  assert.equal(manifest.dependencies["@agentrail/runtime"], "file:../../packages/runtime");
   assert.equal(manifest.dependencies["@agentrail/bot-detector"], "file:../../packages/bot-detector");
   assert.equal(manifest.dependencies["@agentrail/crawler"], "file:../../packages/crawler");
   assert.equal(manifest.dependencies["@agentrail/markdown-extractor"], "file:../../packages/markdown-extractor");

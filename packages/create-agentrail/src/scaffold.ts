@@ -57,6 +57,8 @@ export function buildProjectFiles(config: BuildProjectFilesConfig = {}): Project
         scripts: {
           dev: "wrangler dev --test-scheduled",
           deploy: "wrangler deploy",
+          "kv:drop": "node scripts/agentrail-kv.mjs drop",
+          "kv:clear": "node scripts/agentrail-kv.mjs clear",
           tail: "wrangler tail",
           typecheck: "tsc --noEmit"
         },
@@ -71,6 +73,7 @@ export function buildProjectFiles(config: BuildProjectFilesConfig = {}): Project
     ) + "\n",
     "wrangler.jsonc": buildWranglerConfig(resolvedConfig),
     "src/index.ts": buildWorkerEntrypoint(),
+    "scripts/agentrail-kv.mjs": buildKvHelper(),
     "tsconfig.json": buildTsconfig(),
     "README.md": buildReadme(resolvedConfig)
   };
@@ -86,6 +89,7 @@ function buildDependencies(localPackageRoot?: string, targetDir?: string): Packa
   const root = String(localPackageRoot).replace(/\/+$/g, "");
   return {
     "@agentrail/worker": localPackageReference(root, targetDir, "packages/worker"),
+    "@agentrail/runtime": localPackageReference(root, targetDir, "packages/runtime"),
     "@agentrail/bot-detector": localPackageReference(root, targetDir, "packages/bot-detector"),
     "@agentrail/crawler": localPackageReference(root, targetDir, "packages/crawler"),
     "@agentrail/markdown-extractor": localPackageReference(root, targetDir, "packages/markdown-extractor")
@@ -194,6 +198,108 @@ function buildTsconfig(): string {
   )}\n`;
 }
 
+function buildKvHelper(): string {
+  return `#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const BINDING = "AGENTRAIL_RESOURCES";
+const PAGE_PREFIX = "page:";
+
+const [, , command, ...args] = process.argv;
+const options = new Set(args);
+
+if (command === "drop") {
+  const [value] = args;
+  if (!value) {
+    usage("Missing URL or AgentRail KV key.");
+  }
+  const key = resourceKeyForUrl(value);
+  console.log(\`Deleting AgentRail KV key: \${key}\`);
+  runCommand("wrangler", ["kv", "key", "delete", key, "--binding", BINDING, "--remote"]);
+} else if (command === "clear") {
+  if (!options.has("--yes")) {
+    usage("Refusing to clear remote Cloudflare KV without --yes.");
+  }
+  clearAgentRailKeys(readOption(args, "--prefix") || PAGE_PREFIX);
+} else {
+  usage("Unknown command.");
+}
+
+function resourceKeyForUrl(input) {
+  if (input.startsWith(PAGE_PREFIX)) {
+    return input;
+  }
+  const parsed = new URL(input);
+  parsed.hash = "";
+  parsed.search = "";
+  return \`\${PAGE_PREFIX}\${parsed.toString()}\`;
+}
+
+function clearAgentRailKeys(prefix) {
+  const stdout = runCommand("wrangler", ["kv", "key", "list", "--binding", BINDING, "--prefix", prefix, "--remote"], {
+    capture: true
+  });
+  const keys = JSON.parse(stdout)
+    .map((item) => typeof item === "string" ? item : item?.name)
+    .filter(Boolean);
+
+  if (keys.length === 0) {
+    console.log(\`No AgentRail KV keys found with prefix "\${prefix}".\`);
+    return;
+  }
+
+  const directory = mkdtempSync(join(tmpdir(), "agentrail-kv-"));
+  const filename = join(directory, "keys.json");
+  writeFileSync(filename, JSON.stringify(keys, null, 2));
+
+  try {
+    console.log(\`Deleting \${keys.length} AgentRail KV key(s) with prefix "\${prefix}".\`);
+    runCommand("wrangler", ["kv", "bulk", "delete", filename, "--binding", BINDING, "--remote", "--force"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function readOption(values, name) {
+  const index = values.indexOf(name);
+  if (index === -1) {
+    return "";
+  }
+  return values[index + 1] || "";
+}
+
+function runCommand(binary, args, options = {}) {
+  const result = spawnSync("npx", [binary, ...args], {
+    stdio: options.capture ? ["ignore", "pipe", "inherit"] : "inherit",
+    encoding: "utf8"
+  });
+
+  if (result.error) {
+    console.error(result.error.message);
+    process.exit(1);
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+  return result.stdout || "";
+}
+
+function usage(message) {
+  console.error(message);
+  console.error("");
+  console.error("Usage:");
+  console.error("  npm run kv:drop -- https://example.com/features");
+  console.error("  npm run kv:drop -- page:https://example.com/features");
+  console.error("  npm run kv:clear -- --yes");
+  console.error("  npm run kv:clear -- --yes --prefix page:https://example.com/features");
+  process.exit(1);
+}
+`;
+}
+
 function buildReadme({ projectName, origin, route, crawlSchedule, storageMode, kvNamespaceId }: ResolvedScaffoldConfig): string {
   const kvSetup = kvNamespaceId
     ? `KV namespace configured automatically:
@@ -249,5 +355,23 @@ curl "http://localhost:8787/__scheduled?cron=0+*/6+*+*+*"
 \`\`\`
 
 Deployed projects persist Worker logs to Cloudflare observability by default. Use \`npm run tail\` for a live log stream while testing a deployment.
+
+## Cloudflare KV maintenance
+
+Drop one generated Markdown resource from remote Cloudflare KV by URL:
+
+\`\`\`bash
+npm run kv:drop -- ${origin.replace(/\/$/, "")}/features
+\`\`\`
+
+The script converts the URL to AgentRail's KV key format, for example \`page:${origin.replace(/\/$/, "")}/features\`, and runs Wrangler against the \`AGENTRAIL_RESOURCES\` binding.
+
+Clear all AgentRail page resources from remote Cloudflare KV:
+
+\`\`\`bash
+npm run kv:clear -- --yes
+\`\`\`
+
+After deleting a key, the next AI-agent request falls back to the origin page and schedules a background warmup. A later AI-agent request receives the regenerated Markdown.
 `;
 }

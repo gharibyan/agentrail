@@ -1,6 +1,6 @@
 # AgentRail
 
-AgentRail is a Cloudflare edge layer that gives known AI agents deterministic Markdown responses from the same URLs humans already visit.
+AgentRail gives known AI agents deterministic Markdown responses from the same URLs humans already visit. It can run at the edge through Cloudflare Workers or inside Node.js applications as middleware.
 
 ```txt
 Browser or search crawler -> /pricing -> origin HTML
@@ -46,7 +46,9 @@ flowchart TD
 - `@agentrail/bot-detector`: classifies AI agents, search crawlers, browsers, and unknown bots.
 - `@agentrail/markdown-extractor`: deterministic HTML to Markdown extraction.
 - `@agentrail/crawler`: sitemap parsing, link discovery, resource keys, and crawl processing.
+- `@agentrail/runtime`: platform-neutral request handling and warmup rules.
 - `@agentrail/worker`: Cloudflare Worker runtime.
+- `@agentrail/node`: Node.js middleware adapters for Express and Nest-style apps.
 - `create-agentrail`: scaffold generator for Cloudflare projects.
 
 ## Quick Test
@@ -186,6 +188,37 @@ npm run deploy
 
 If this is the first Worker on the Cloudflare account, open Workers & Pages in the Cloudflare dashboard once before deploying so Cloudflare creates the required `workers.dev` subdomain for cron schedules.
 
+## Cloudflare KV Maintenance
+
+Generated Cloudflare projects include operator scripts for remote `AGENTRAIL_RESOURCES` KV cleanup.
+
+Drop one generated Markdown resource by URL:
+
+```bash
+npm run kv:drop -- https://www.finalbitai.com/features
+```
+
+Clear all generated AgentRail page resources:
+
+```bash
+npm run kv:clear -- --yes
+```
+
+For older generated projects that do not have these scripts yet, run Wrangler directly from the deployed project directory:
+
+```bash
+npx wrangler kv key delete "page:https://www.finalbitai.com/features" --binding AGENTRAIL_RESOURCES --remote
+```
+
+To clear all AgentRail page keys manually, list keys with the `page:` prefix and pass that JSON file to Wrangler bulk delete:
+
+```bash
+npx wrangler kv key list --binding AGENTRAIL_RESOURCES --prefix "page:" --remote > agentrail-keys.json
+npx wrangler kv bulk delete agentrail-keys.json --binding AGENTRAIL_RESOURCES --remote --force
+```
+
+After deleting a key, the next AI-agent request falls back to the origin page and schedules background warmup. A later AI-agent request receives regenerated Markdown.
+
 ## Runtime Contract
 
 AgentRail only returns Markdown when a stored resource is safe to serve:
@@ -197,6 +230,56 @@ AgentRail only returns Markdown when a stored resource is safe to serve:
 Humans, traditional search crawlers, unknown bots, assets, and non-GET/HEAD requests always pass through to origin.
 Known AI-agent GET requests with no KV record also schedule a background warmup from the origin response before passing through. That keeps the first miss fast and prepares the next bot request.
 
+## Node.js Middleware
+
+For non-Cloudflare deployments, install the Node adapter in the application that serves your website and mount it before your normal routes.
+
+```ts
+import express from "express";
+import { createAgentRailMiddleware, createFileResourceStore } from "@agentrail/node";
+
+const app = express();
+
+app.use(createAgentRailMiddleware({
+  origin: "https://example.com",
+  store: createFileResourceStore({ directory: ".agentrail/resources" })
+}));
+
+app.get("/pricing", (_request, response) => {
+  response.type("html").send("<main><h1>Pricing</h1></main>");
+});
+```
+
+NestJS can use the same adapter through `app.use(...)`:
+
+```ts
+import { NestFactory } from "@nestjs/core";
+import { createNestAgentRailMiddleware, createFileResourceStore } from "@agentrail/node";
+import { AppModule } from "./app.module";
+
+const app = await NestFactory.create(AppModule);
+
+app.use(createNestAgentRailMiddleware({
+  origin: "https://example.com",
+  store: createFileResourceStore({ directory: ".agentrail/resources" })
+}));
+
+await app.listen(3000);
+```
+
+The file-backed store is intended for local and small self-hosted trials. Production Node deployments should use a durable store adapter such as Postgres, Redis, DynamoDB, or Cloud SQL as those packages are added.
+
+## Self-Hosted And Cloud Presets
+
+The platform-neutral runtime is the base for non-Cloudflare deployments:
+
+- Docker gateway: run AgentRail as a reverse proxy in front of an origin app.
+- AWS: run the Docker gateway on ECS/Fargate or behind an ALB, with EventBridge/SQS for scheduled crawl work.
+- GCP: run the Docker gateway on Cloud Run, with Cloud Scheduler/Pub/Sub for scheduled crawl work.
+- Kubernetes: run the gateway and crawler worker as separate deployments with a shared durable store.
+
+Those presets should reuse `@agentrail/runtime` so request behavior remains identical across Cloudflare, Node middleware, and container deployments.
+
 ## Default AI-Agent Bots
 
 AgentRail treats these user agents as AI-agent traffic by default:
@@ -207,6 +290,7 @@ GPTBot
 ChatGPT-User
 OAI-SearchBot
 Google-CloudVertexBot
+Claude (versioned Claude/1.0 style user agents)
 ClaudeBot
 Claude-User
 Claude-SearchBot
